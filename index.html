@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Locker Hideout</title>
+<style>
+*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#10151d;font-family:Arial,sans-serif;color:#fff;touch-action:none}canvas{display:block;width:100%;height:100%}
+#hud{position:absolute;inset:0;pointer-events:none}.topbar{position:absolute;top:16px;left:50%;transform:translateX(-50%);display:flex;gap:9px}.chip{height:38px;min-width:74px;padding:8px 12px;border-radius:8px;background:rgba(10,16,26,.82);border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px}.chip b{color:#74e2ff;margin-right:6px}.objective{position:absolute;left:18px;top:16px;width:230px;padding:12px 14px;border-radius:10px;background:rgba(8,13,21,.84);border-left:4px solid #50bff0;font-size:13px}.objective strong{display:block;font-size:11px;letter-spacing:1.2px;color:#72cfee;margin-bottom:5px}.controls{position:absolute;left:18px;bottom:18px}.dpad{position:relative;width:150px;height:150px}.key{position:absolute;width:48px;height:48px;border-radius:50%;border:1px solid rgba(255,255,255,.18);background:rgba(25,32,43,.78);display:flex;align-items:center;justify-content:center;font-size:20px;pointer-events:auto;user-select:none}.key:active,.act:active{background:#3e6680}.up{left:51px;top:0}.down{left:51px;bottom:0}.left{left:0;top:51px}.right{right:0;top:51px}.actions{position:absolute;right:20px;bottom:24px;display:flex;align-items:flex-end;gap:12px}.act{pointer-events:auto;width:74px;height:74px;border-radius:50%;border:2px solid rgba(255,255,255,.22);background:rgba(20,38,52,.84);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12px;font-weight:bold}.act span{font-size:22px}.act.interact{width:86px;height:86px;color:#ffd56a}.crosshair{position:absolute;left:50%;top:50%;width:8px;height:8px;margin:-4px;border:1px solid rgba(255,255,255,.7);border-radius:50%;display:none}.prompt{position:absolute;left:50%;bottom:28%;transform:translateX(-50%);padding:9px 14px;border-radius:8px;background:rgba(8,13,21,.9);font-size:14px;display:none}.prompt em{color:#ffd56a;font-style:normal;font-weight:bold}#notice{position:absolute;left:50%;top:20%;transform:translate(-50%,-50%);padding:13px 18px;border-radius:8px;background:rgba(20,25,36,.94);font-weight:bold;opacity:0;transition:.25s}.minimap{position:absolute;right:16px;top:16px;width:110px;height:110px;border:1px solid rgba(255,255,255,.12);border-radius:50%;background:rgba(8,13,21,.72);overflow:hidden}.minimap:after{content:"";position:absolute;left:50%;top:50%;width:8px;height:8px;margin:-4px;border-radius:50%;background:#60d8ff}.keyicon{position:absolute;right:14px;top:140px;padding:8px 10px;border-radius:7px;background:rgba(8,13,21,.75);font-size:12px}.keyicon span{color:#d7b84c}@media(max-width:700px){.objective{width:190px}.minimap{width:82px;height:82px}.keyicon{top:110px}.dpad{width:132px;height:132px}.key{width:42px;height:42px}.up{left:45px}.down{left:45px}.left{top:45px}.right{top:45px}.actions{right:12px}.act{width:64px;height:64px}.act.interact{width:76px;height:76px}}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas><div id="hud">
+<div class="objective"><strong>MISSION</strong><span id="task">Search the lockers for a key</span></div>
+<div class="topbar"><div class="chip"><b>●</b> <span id="day">DAY 1</span></div><div class="chip">TIME <b id="time">20:00</b></div></div>
+<div class="minimap"></div><div class="keyicon"><span>◆</span> Key: <b id="keys">0</b></div>
+<div class="controls"><div class="dpad"><div class="key up" data-dir="up">▲</div><div class="key left" data-dir="left">◀</div><div class="key right" data-dir="right">▶</div><div class="key down" data-dir="down">▼</div></div></div>
+<div class="actions"><div class="act" id="hide"><span>◉</span>HIDE</div><div class="act interact" id="interact"><span>✋</span>USE</div></div>
+<div class="crosshair" id="cross"></div><div class="prompt" id="prompt"></div><div id="notice"></div>
+</div>
+<script>
+const canvas=document.getElementById('game'),ctx=canvas.getContext('2d');let W,H,DPR;
+const state={x:220,y:560,angle:0,keys:0,hiding:false,found:false,doorUnlocked:false,seconds:0,t:0};
+const rooms=[{x:40,y:40,w:300,h:680,color:'#6b7580'},{x:340,y:40,w:520,h:680,color:'#d7c8ad'},{x:860,y:40,w:300,h:680,color:'#596773'}];
+const lockers=[];for(let i=0;i<4;i++)lockers.push({x:410+i*78,y:120,w:58,h:92,blue:i===1,open:false});
+const keyPos={x:660,y:575};const blueLocker=lockers[1];const enemy={x:1120,y:600,vx:-1,active:true};
+function resize(){DPR=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;canvas.width=W*DPR;canvas.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0)}addEventListener('resize',resize);resize();
+const pressed={};addEventListener('keydown',e=>pressed[e.key.toLower]=pressed[e.key.toLower]=true);addEventListener('keyup',e=>pressed[e.key.toLower]=false);
+function bind(el,dir){el.pointerdown=e=>{e.prevent;pressed[dir]=true};el.pointerup=e=>{pressed[dir]=false};el.pointercancel=()=>pressed[dir]=false}
+bind(document.querySelector('[data-dir="up"]'],'w');bind(document.querySelector('[data-dir="down"]'],'s');bind(document.querySelector('[data-dir="left"]'],'a');bind(document.querySelector('[data-dir="right"]'),'d');
+document.querySelectorAll('.key').forEach(k=>{let d=k.dataset.dir;const map={up:'w',down:'s',left:'a',right:'d'};k.addEventListener('pointerdown',e=>{e.preventDefault();pressed[map[d]]=true});k.addEventListener('pointerup',()=>pressed[map[d]]=false);k.addEventListener('pointercancel',()=>pressed[map[d]]=false)});
+function notice(s){const n=document.getElementById('notice');n.textContent=s;n.style.opacity=1;clearTimeout(notice.t);notice.t=setTimeout(()=>n.style.opacity=0,1700)}
+function interact(){if(state.hiding){state.hiding=false;state.x=Math.max(300,state.x);notice('You left the locker');return}for(const l of lockers){if(Math.hypot(state.x-(l.x+l.w/2),state.y-(l.y+l.h/2))<105){state.hiding=true;state.x=l.x+l.w/2;state.y=l.y+l.h/2;notice(l.blue?'Hiding in the blue locker':'You are hidden');return}}if(!state.found&&Math.hypot(state.x-keyPos.x,state.y-keyPos.y)<75){state.found=true;state.keys=1;document.getElementById('keys').textContent='1';document.getElementById('task').textContent='Unlock the 20-lock door';notice('Key found!')}if(state.keys&&Math.hypot(state.x-1060,state.y-390)<110){state.doorUnlocked=true;document.getElementById('task').textContent='Escaped — you survived!';notice('Door unlocked — LOCK 20 OPEN')}}
+document.getElementById('interact').addEventListener('click',interact);document.getElementById('hide').addEventListener('click',interact);addEventListener('keydown',e=>{if(e.key===' '||e.key==='Enter')interact()});
+function collision(x,y){if(x<55||x>1145||y<80||y>700)return true;for(const l of lockers)if(x>l.x-12&&x<l.x+l.w+12&&y>l.y-12&&y<l.y+l.h+12)return true;if(!state.doorUnlocked&&x>1035&&x<1075&&y>330&&y<440)return true;return false}
+function update(dt){if(!state.hiding){let dx=0,dy=0;if(pressed.w||pressed.ArrowUp)dy=-1;if(pressed.s||pressed.ArrowDown)dy=1;if(pressed.a||pressed.ArrowLeft)dx=-1;if(pressed.d||pressed.ArrowRight)dx=1;if(dx||dy){let len=Math.hypot(dx,dy);dx/=len;dy/=len;let nx=state.x+dx*210*dt,ny=state.y+dy*210*dt;if(!collision(nx,state.y))state.x=nx;if(!collision(state.x,ny))state.y=ny;state.angle=Math.atan2(dy,dx)}}enemy.x+=enemy.vx*58*dt;if(enemy.x<880||enemy.x>1120)enemy.vx*= -1;state.t+=dt;state.seconds+=dt;if(state.seconds>1){state.seconds-=1;let m=1200-Math.floor(state.t);let mm=Math.floor(m/60),ss=m%60;document.getElementById('time').textContent=String(mm).padStart(2,'0')+':'+String(ss).padStart(2,'0')}}
+function wall(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(x,y,w,h)}
+function drawLocker(l){ctx.fillStyle=l.blue?'#2b75a8':'#677586';ctx.fillRect(l.x,l.y,l.w,l.h);ctx.strokeStyle='#18232d';ctx.lineWidth=4;ctx.strokeRect(l.x,l.y,l.w,l.h);ctx.fillStyle='#b9c2c8';ctx.fillRect(l.x+15,l.y+10,28,5);ctx.fillRect(l.x+28,l.y+65,5,13);ctx.fillStyle='#263440';ctx.fillRect(l.x+8,l.y+46,42,3)}
+function drawPerson(x,y,enemy=false){ctx.save();ctx.translate(x,y);ctx.rotate(enemy?Math.PI:0);ctx.fillStyle=enemy?'#9d4a58':'#d89a73';ctx.beginPath();ctx.arc(0,-25,13,0,7);ctx.fill();ctx.fillStyle=enemy?'#2b1a22':'#d6edf2';ctx.fillRect(-11,-12,22,30);ctx.fillStyle=enemy?'#2b1a22':'#51606d';ctx.fillRect(-10,17,8,20);ctx.fillRect(2,17,8,20);ctx.restore()}
+function render(){let sx=W/1200,sy=H/760,scale=Math.min(sx,sy),ox=(W-1200*scale)/2,oy=(H-760*scale)/2;ctx.setTransform(DPR,0,0,DPR,0,0);ctx.fillStyle='#202731';ctx.fillRect(0,0,W,H);ctx.save();ctx.translate(ox,oy);ctx.scale(scale,scale);
+ctx.fillStyle='#d0cbbf';ctx.fillRect(20,20,1160,700);rooms.forEach(r=>{ctx.fillStyle=r.color;ctx.fillRect(r.x,r.y,r.w,r.h);ctx.strokeStyle='#aeb2ae';ctx.lineWidth=8;ctx.strokeRect(r.x,r.y,r.w,r.h)});
+// floor tiles and room details
+ctx.strokeStyle='rgba(70,76,82,.18)';ctx.lineWidth=2;for(let x=0;x<1200;x+=80){ctx.beginPath();ctx.moveTo(x,20);ctx.lineTo(x,720);ctx.stroke()}for(let y=40;y<720;y+=80){ctx.beginPath();ctx.moveTo(20,y);ctx.lineTo(1180,y);ctx.stroke()}
+// desks and crop top area
+ctx.fillStyle='#7f5a3e';ctx.fillRect(170,510,190,20);ctx.fillRect(185,530,12,70);ctx.fillRect(340,530,12,70);ctx.fillStyle='#3f4c58';ctx.fillRect(180,470,170,44);ctx.fillStyle='#e0bd9b';ctx.fillRect(650,580,18,42);ctx.fillStyle='#f4adca';ctx.fillRect(640,555,38,28);ctx.fillStyle='#fff';ctx.font='bold 18px Arial';ctx.fillText('CROP TOP',620,540);
+lockers.forEach(drawLocker);
+// door
+ctx.fillStyle='#1d2732';ctx.fillRect(1038,330,100,260);ctx.fillStyle='#263949';ctx.fillRect(1050,345,76,230);ctx.strokeStyle='#7d929e';ctx.lineWidth=5;ctx.strokeRect(1050,345,76,230);ctx.fillStyle='#d9b75c';ctx.beginPath();ctx.arc(1113,460,8,0,7);ctx.fill();ctx.fillStyle='#fff';ctx.font='bold 28px Arial';ctx.fillText('20',1072,430);
+if(!state.found){ctx.fillStyle='#d6c04f';ctx.fillRect(keyPos.x-5,keyPos.y-10,10,18);ctx.fillStyle='#eadb67';ctx.beginPath();ctx.arc(keyPos.x,keyPos.y-12,7,0,7);ctx.fill()}
+drawPerson(enemy.x,enemy.y,true);if(!state.hiding)drawPerson(state.x,state.y,false);else{drawPerson(state.x,state.y,false);ctx.fillStyle='rgba(80,160,210,.35)';ctx.fillRect(blueLocker.x,blueLocker.y,blueLocker.w,blueLocker.h)}
+ctx.restore();requestAnimationFrame(loop)}
+function loop(now){let dt=last?Math.min((now-last)/1000,.05):0;last=now;update(dt);render()}let last=0;
+// prompt updates
+setInterval(()=>{let p=document.getElementById('prompt');let text='';if(state.hiding)text='<em>E</em>  Leave locker';else{for(const l of lockers)if(Math.hypot(state.x-(l.x+l.w/2),state.y-(l.y+l.h/2))<105){text=l.blue?'<em>E</em>  Hide in blue locker':'<em>E</em>  Hide in locker'}if(!state.found&&Math.hypot(state.x-keyPos.x,state.y-keyPos.y)<75)text='<em>E</em>  Search key';if(state.keys&&Math.hypot(state.x-1060,state.y-390)<110)text='<em>E</em>  Unlock door'}p.innerHTML=text;p.style.display=text?'block':'none'},100);
+requestAnimationFrame(loop);
+</script>
+</body></html>
